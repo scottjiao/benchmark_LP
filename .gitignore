@@ -1,2 +1,4 @@
 data
 **/checkpoint
+*.txt
+*.pyc

@@ -215,7 +215,7 @@ def run_model_DBLP(args):
             dl.gen_file_for_evaluate(test_neigh, pred, test_edge_type, file_path=f"{args.dataset}_{args.run}.txt", flag=first_flag)
             first_flag = False
             res = dl.evaluate(edge_list, pred, labels)
-            print(res)
+            print(f"res {res}")
             for k in res:
                 res_2hop[k] += res[k]
         with torch.no_grad():
@@ -232,15 +232,15 @@ def run_model_DBLP(args):
             edge_list = np.concatenate([left.reshape((1,-1)), right.reshape((1,-1))], axis=0)
             labels = labels.cpu().numpy()
             res = dl.evaluate(edge_list, pred, labels)
-            print(res)
+            print(f"res {res}")
             for k in res:
                 res_random[k] += res[k]
     for k in res_2hop:
         res_2hop[k] /= total
     for k in res_random:
         res_random[k] /= total
-    print(res_2hop)
-    print(res_random)
+    print(f"res_2hop {res_2hop}")
+    print(f"res_random {res_random}")
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description='MRGNN testing for the DBLP dataset')
