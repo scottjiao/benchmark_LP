@@ -11,9 +11,12 @@ import numpy as np
 
 from utils.pytorchtools import EarlyStopping
 from utils.data import load_data
-from GNN import myGAT
+from GNN import myGAT,slotGAT
 import dgl
 import os
+
+torch.set_num_threads(4)
+
 
 def sp_to_spt(mat):
     coo = mat.tocoo()
@@ -32,6 +35,8 @@ def mat2tensor(mat):
     return sp_to_spt(mat)
 
 def run_model_DBLP(args):
+
+    os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu
     feats_type = args.feats_type
     features_list, adjM, dl = load_data(args.dataset)
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -93,19 +98,62 @@ def run_model_DBLP(args):
     res_2hop = defaultdict(float)
     res_random = defaultdict(float)
     total = len(list(dl.links_test['data'].keys()))
+    num_ntypes=len(features_list)
+    #num_layers=len(hiddens)-1
+    num_nodes=dl.nodes['total']
+
+    g.node_idx_by_ntype=[]
+
+    g.node_ntype_indexer=torch.zeros(num_nodes,num_ntypes).to(device)
+    ntype_dims=[]
+    idx_count=0
+    ntype_count=0
+    for feature in features_list:
+        temp=[]
+        for _ in feature:
+            temp.append(idx_count)
+            g.node_ntype_indexer[idx_count][ntype_count]=1
+            idx_count+=1
+
+        g.node_idx_by_ntype.append(temp)
+        ntype_dims.append(feature.shape[1])
+        ntype_count+=1
+    ntypes=g.node_ntype_indexer.argmax(1)
 
     if True:
         train_pos, valid_pos = dl.get_train_valid_pos()#edge_types=[test_edge_type])
+        # train_pos {etype0: [[...], [...]], etype1: [[...], [...]]}
+        # valid_pos {etype0: [[...], [...]], etype1: [[...], [...]]}
         num_classes = args.hidden_dim
         heads = [args.num_heads] * args.num_layers + [args.num_heads]
-        net = myGAT(g, args.edge_feats, len(dl.links['count'])*2+1, in_dims, args.hidden_dim, num_classes, args.num_layers, heads, F.elu, args.dropout, args.dropout, args.slope, False, 0., decode=args.decoder)
+        num_ntype=len(features_list)
+        g.num_ntypes=num_ntype
+        n_type_mappings=False
+        res_n_type_mappings=False
+        etype_specified_attention=False
+        eindexer=None
+        if args.net=="myGAT":
+            net = myGAT(g, args.edge_feats, len(dl.links['count'])*2+1, in_dims, args.hidden_dim, num_classes, args.num_layers, heads, F.elu, args.dropout, args.dropout, args.slope, False, 0., decode=args.decoder)
+        elif args.net=="slotGAT":
+            net = slotGAT(g, args.edge_feats, len(dl.links['count'])*2+1, in_dims, args.hidden_dim, num_classes, args.num_layers, heads, F.elu, args.dropout, args.dropout, args.slope, True, 0.05, num_ntype,
+                 n_type_mappings,
+                 res_n_type_mappings,
+                 etype_specified_attention,
+                 eindexer,decode=args.decoder)
+        print(net) if args.verbose=="True" else None
+        
+
+            
         net.to(device)
         optimizer = torch.optim.Adam(net.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
         # training loop
         net.train()
+
+        
         early_stopping = EarlyStopping(patience=args.patience, verbose=True, save_path='checkpoint/checkpoint_{}_{}.pt'.format(args.dataset, args.num_layers))
         loss_func = nn.BCELoss()
+    
     for epoch in range(args.epoch):
         train_pos_head_full = np.array([])
         train_pos_tail_full = np.array([])
@@ -113,12 +161,13 @@ def run_model_DBLP(args):
         train_neg_tail_full = np.array([])
         r_id_full = np.array([])
         for test_edge_type in dl.links_test['data'].keys():
-          train_neg = dl.get_train_neg(edge_types=[test_edge_type])[test_edge_type]
-          train_pos_head_full = np.concatenate([train_pos_head_full, np.array(train_pos[test_edge_type][0])])
-          train_pos_tail_full = np.concatenate([train_pos_tail_full, np.array(train_pos[test_edge_type][1])])
-          train_neg_head_full = np.concatenate([train_neg_head_full, np.array(train_neg[0])])
-          train_neg_tail_full = np.concatenate([train_neg_tail_full, np.array(train_neg[1])])
-          r_id_full = np.concatenate([r_id_full, np.array([test_edge_type]*len(train_pos[test_edge_type][0]))])
+            train_neg = dl.get_train_neg(edge_types=[test_edge_type])[test_edge_type]
+            # train_neg [[0, 0, 0, 0, 0, 0, 0, 0, 0, ...], [9294, 8277, 4484, 7413, 1883, 5117, 9256, 3106, 636, ...]]
+            train_pos_head_full = np.concatenate([train_pos_head_full, np.array(train_pos[test_edge_type][0])])
+            train_pos_tail_full = np.concatenate([train_pos_tail_full, np.array(train_pos[test_edge_type][1])])
+            train_neg_head_full = np.concatenate([train_neg_head_full, np.array(train_neg[0])])
+            train_neg_tail_full = np.concatenate([train_neg_tail_full, np.array(train_neg[1])])
+            r_id_full = np.concatenate([r_id_full, np.array([test_edge_type]*len(train_pos[test_edge_type][0]))])
         train_idx = np.arange(len(train_pos_head_full))
         np.random.shuffle(train_idx)
         batch_size = args.batch_size
@@ -131,9 +180,9 @@ def run_model_DBLP(args):
             train_pos_tail = train_pos_tail_full[train_idx[start:start+batch_size]]
             train_neg_tail = train_neg_tail_full[train_idx[start:start+batch_size]]
             r_id = r_id_full[train_idx[start:start+batch_size]]
-            left = np.concatenate([train_pos_head, train_neg_head])
-            right = np.concatenate([train_pos_tail, train_neg_tail])
-            mid = np.concatenate([r_id, r_id])
+            left = np.concatenate([train_pos_head, train_neg_head])  #to get heads embeddings
+            right = np.concatenate([train_pos_tail, train_neg_tail])   #to get tail embeddings
+            mid = np.concatenate([r_id, r_id])  #specify edge types
             labels = torch.FloatTensor(np.concatenate([np.ones(train_pos_head.shape[0]), np.zeros(train_neg_head.shape[0])])).to(device)
 
             logits = net(features_list, e_feat, left, right, mid)
@@ -199,9 +248,9 @@ def run_model_DBLP(args):
             # save = np.array([test_neigh[0], test_neigh[1], test_label])
             # print(save)
             # np.savetxt(f"{args.dataset}_{test_edge_type}_label.txt", save, fmt="%i")
-            save = np.loadtxt(os.path.join(dl.path, f"{args.dataset}_ini_{test_edge_type}_label.txt"), dtype=int)
-            test_neigh = [save[0], save[1]]
-            test_label = np.random.randint(2, size=save[0].shape[0])
+            #save = np.loadtxt(os.path.join(dl.path, f"{args.dataset}_ini_{test_edge_type}_label.txt"), dtype=int)
+            #test_neigh = [save[0], save[1]]
+            #test_label = np.random.randint(2, size=save[0].shape[0])
             # test_label = save[2]
             left = np.array(test_neigh[0])
             right = np.array(test_neigh[1])
@@ -262,10 +311,14 @@ if __name__ == '__main__':
     ap.add_argument('--weight-decay', type=float, default=1e-4)
     ap.add_argument('--slope', type=float, default=0.01)
     ap.add_argument('--dataset', type=str)
+    ap.add_argument('--net', type=str, default='myGAT')
+    ap.add_argument('--gpu', type=str, default="0")
+    ap.add_argument('--verbose', type=str, default='False')
     ap.add_argument('--edge-feats', type=int, default=32)
     ap.add_argument('--batch-size', type=int, default=1024)
     ap.add_argument('--decoder', type=str, default='distmult')
     ap.add_argument('--run', type=int, default=1)
+
 
     args = ap.parse_args()
     run_model_DBLP(args)

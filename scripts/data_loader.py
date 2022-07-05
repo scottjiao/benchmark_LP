@@ -410,7 +410,7 @@ class data_loader:
     def get_test_neigh_w_random(self):
         random.seed(1)
         all_had_neigh = defaultdict(list)
-        neg_neigh, pos_neigh, test_neigh, test_label = dict(), dict(), dict(), dict()
+        neg_neigh, pos_neigh, neigh, label = dict(), dict(), dict(), dict()
         edge_types = self.test_types
         '''get pos_links of train and test data'''
         pos_links = 0
@@ -440,23 +440,23 @@ class data_loader:
                 while neg_t in all_had_neigh[h_id]:
                     neg_t = random.randrange(t_range[0], t_range[1])
                 neg_neigh[r_id][h_id].append(neg_t)
-            '''get the test_neigh'''
-            test_neigh[r_id] = [[], []]
+            '''get the neigh'''
+            neigh[r_id] = [[], []]
             pos_list = [[], []]
             neg_list = [[], []]
-            test_label[r_id] = []
+            label[r_id] = []
             for h_id in sorted(list(pos_neigh[r_id].keys())):
                 pos_list[0] = [h_id] * len(pos_neigh[r_id][h_id])
                 pos_list[1] = pos_neigh[r_id][h_id]
-                test_neigh[r_id][0].extend(pos_list[0])
-                test_neigh[r_id][1].extend(pos_list[1])
-                test_label[r_id].extend([1] * len(pos_neigh[r_id][h_id]))
+                neigh[r_id][0].extend(pos_list[0])
+                neigh[r_id][1].extend(pos_list[1])
+                label[r_id].extend([1] * len(pos_neigh[r_id][h_id]))
                 neg_list[0] = [h_id] * len(neg_neigh[r_id][h_id])
                 neg_list[1] = neg_neigh[r_id][h_id]
-                test_neigh[r_id][0].extend(neg_list[0])
-                test_neigh[r_id][1].extend(neg_list[1])
-                test_label[r_id].extend([0] * len(neg_neigh[r_id][h_id]))
-        return test_neigh, test_label
+                neigh[r_id][0].extend(neg_list[0])
+                neigh[r_id][1].extend(neg_list[1])
+                label[r_id].extend([0] * len(neg_neigh[r_id][h_id]))
+        return neigh, label
 
     def get_test_neigh_full_random(self):
         edge_types = self.test_types

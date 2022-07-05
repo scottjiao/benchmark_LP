@@ -225,8 +225,8 @@ def run_model_DBLP(args):
         res_2hop[k] /= total
     for k in res_random:
         res_random[k] /= total
-    print(res_2hop)
-    print(res_random)
+    print(f"res_2hop {res_2hop}")
+    print(f"res_random {res_random}")
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description='MRGNN testing for the DBLP dataset')
