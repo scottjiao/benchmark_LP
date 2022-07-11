@@ -1,0 +1,2 @@
+1_Lr,1_Wd,1_batchSize,1_decoder,1_featType,1_hiddenDim,1_numLayers,1_numOfHeads,2_valLossNeg,2_valMRRRandom,2_valRocAucRandom,3_testMRR2hop,3_testMRRRandom,3_testRocAuc2hop,3_testRocAucRandom
+0.0005,0.0002,8192,dot,3,64,3,2,-0.39724642038345337,0.9790302037845707,0.8998965763476833,0.907006296942569,0.9911488759072403,0.671825946668786,0.9072452624053826

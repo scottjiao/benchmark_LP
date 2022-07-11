@@ -123,7 +123,7 @@ class slotGAT(nn.Module):
                  eindexer,
                  ae_layer=False,aggregator="average",semantic_trans="False",semantic_trans_normalize="row",attention_average="False",attention_mse_sampling_factor=0,attention_mse_weight_factor=0,attention_1_type_bigger_constraint=0,attention_0_type_bigger_constraint=0,predicted_by_slot="None",
                  addLogitsEpsilon=0,addLogitsTrain="None",get_out=[""],slot_attention="False",relevant_passing="False",
-                 decode='distmult'):
+                 decode='distmult',inProcessEmb="True"):
         super(slotGAT, self).__init__()
         self.g = g
         self.num_layers = num_layers
@@ -144,8 +144,10 @@ class slotGAT(nn.Module):
         self.addLogitsTrain=addLogitsTrain
         self.slot_attention=slot_attention
         self.relevant_passing=relevant_passing
+        self.inProcessEmb=inProcessEmb
         if relevant_passing=="True":
             assert slot_attention=="True"
+        self.l2BySlot=l2BySlot
 
         #self.ae_drop=nn.Dropout(feat_drop)
         #if ae_layer=="last_hidden":
@@ -169,20 +171,17 @@ class slotGAT(nn.Module):
             feat_drop, attn_drop, negative_slope, residual, None, alpha=alpha,num_ntype=num_ntype,n_type_mappings=n_type_mappings,res_n_type_mappings=res_n_type_mappings,etype_specified_attention=etype_specified_attention,eindexer=eindexer,semantic_trans=semantic_trans,semantic_trans_normalize=semantic_trans_normalize,attention_average=attention_average,attention_mse_sampling_factor=attention_mse_sampling_factor,attention_mse_weight_factor=attention_mse_weight_factor,attention_1_type_bigger_constraint=attention_1_type_bigger_constraint,attention_0_type_bigger_constraint=attention_0_type_bigger_constraint,slot_attention=slot_attention,relevant_passing=relevant_passing))
         self.aggregator=aggregator
         self.by_slot=[f"by_slot_{nt}" for nt in range(g.num_ntypes)]
-        assert aggregator in (["onedimconv","average","last_fc","slot_majority_voting","max"]+self.by_slot)
+        assert aggregator in (["onedimconv","average","last_fc","slot_majority_voting","max","None"]+self.by_slot)
         if self.aggregator=="onedimconv":
             self.nt_aggr=nn.Parameter(torch.FloatTensor(1,1,self.num_ntype,1));nn.init.normal_(self.nt_aggr,std=1)
         #self.get_out=get_out
         self.epsilon = torch.FloatTensor([1e-12]).cuda()
         if decode == 'distmult':
+            if self.aggregator=="None":
+                num_classes=num_classes*num_ntype
             self.decoder = DistMult(num_etypes, num_classes*(num_layers+2))
         elif decode == 'dot':
             self.decoder = Dot()
-
-
-    def l2_norm(self, x):
-        # This is an equivalent replacement for tf.l2_normalize, see https://www.tensorflow.org/versions/r1.15/api_docs/python/tf/math/l2_normalize for more information.
-        return x / (torch.max(torch.norm(x, dim=1, keepdim=True), self.epsilon))
 
     def forward(self, features_list,e_feat, left, right, mid, get_out="False"): 
         encoded_embeddings=None
@@ -193,17 +192,20 @@ class slotGAT(nn.Module):
             emsen_ft[:,nt_ft.shape[1]*nt_id:nt_ft.shape[1]*(nt_id+1)]=nt_ft
             h.append(emsen_ft)   # the id is decided by the node types
         h = torch.cat(h, 0)        #  num_nodes*(num_type*hidden_dim)
-        emb = [self.l2_norm(h)]
+        emb = [self.aggr_func(self.l2_norm(h,l2BySlot=self.l2BySlot))]
         res_attn = None
         for l in range(self.num_layers):
             h, res_attn = self.gat_layers[l](self.g, h, e_feat,get_out=get_out, res_attn=res_attn)   #num_nodes*num_heads*(num_ntype*hidden_dim)
-            emb.append(self.l2_norm(h.mean(1)))
+            emb.append(self.aggr_func(self.l2_norm(h.mean(1),l2BySlot=self.l2BySlot)))
             h = h.flatten(1)#num_nodes*(num_heads*num_ntype*hidden_dim)
             #if self.ae_layer=="last_hidden":
             encoded_embeddings=h
         # output projection
         logits, _ = self.gat_layers[-1](self.g, h, e_feat,get_out=get_out, res_attn=None)   #num_nodes*num_heads*num_ntype*hidden_dim
         #average across the ntype info
+
+        
+        logits = logits.mean(1)
         if self.predicted_by_slot!="None" and self.training==False:
             logits=logits.view(-1,1,self.num_ntype,self.num_classes)
             self.scale_analysis=torch.std_mean(logits.squeeze(1).mean(dim=-1).detach().cpu(),dim=0) if get_out!=[""] else None
@@ -268,36 +270,57 @@ class slotGAT(nn.Module):
                 target_slot=int(self.predicted_by_slot)
                 logits=logits[:,:,target_slot,:].squeeze(2)
         else:
-        
-            if self.aggregator=="average":
-                logits=logits.view(-1, self.heads[-1] ,self.num_ntype,self.num_classes).mean(2)
-            elif self.aggregator=="onedimconv":
-                logits=(logits.view(-1,self.heads[-1],self.num_ntype,self.num_classes)*F.softmax(self.leaky_relu(self.nt_aggr),dim=2)).sum(2)
-            elif self.aggregator=="last_fc":
-                logits=logits.view(-1,self.heads[-1],self.num_ntype,self.num_classes)
-                logits=logits.flatten(1)
-                logits=logits.matmul(self.last_fc).unsqueeze(1)
-            elif self.aggregator=="max":
-                logits=logits.view(-1,self.heads[-1],self.num_ntype,self.num_classes).max(2)[0]
-
-
-
-            else:
-                raise NotImplementedError()
+            logits=self.aggr_func(logits)
+            
         #average across the heads
         ### logits = [num_nodes *  num_of_heads *num_classes]
         #self.logits_mean=logits.flatten().mean()
-        logits = logits.mean(1)
 
 
         #if self.addLogitsTrain=="True" or (self.addLogitsTrain=="False" and self.training==False):
         #    logits+=self.addLogitsEpsilon
         
-        logits = self.l2_norm(logits)
-        emb.append(logits)
+        logits = self.l2_norm(logits,l2BySlot=self.l2BySlot)
+        if self.inProcessEmb=="True":
+            emb.append(logits)
+        else:
+            emb=[logits]
         o = torch.cat(emb, 1)
         left_emb = o[left]
         right_emb = o[right]
         return self.decoder(left_emb, right_emb, mid)
 
+
+    def l2_norm(self, x,l2BySlot="False"):
+        # This is an equivalent replacement for tf.l2_normalize, see https://www.tensorflow.org/versions/r1.15/api_docs/python/tf/math/l2_normalize for more information.
+        if l2BySlot=="False":
+            return x / (torch.max(torch.norm(x, dim=1, keepdim=True), self.epsilon))
+        elif l2BySlot=="True":
+            logits=logits.view(-1, self.num_ntype,self.num_classes)
+            x=x / (torch.max(torch.norm(x, dim=1, keepdim=True), self.epsilon))
+            x=x.flatten(1)
+            return x
+
+
+    def aggr_func(self,logits):
+        if self.aggregator=="average":
+            logits=logits.view(-1, self.num_ntype,self.num_classes).mean(1)
+        #elif self.aggregator=="onedimconv":
+            #logits=(logits.view(-1,self.num_ntype,self.num_classes)*F.softmax(self.leaky_relu(self.nt_aggr),dim=2)).sum(2)
+        elif self.aggregator=="last_fc":
+            logits=logits.view(-1,self.num_ntype,self.num_classes)
+            logits=logits.flatten(1)
+            logits=logits.matmul(self.last_fc).unsqueeze(1)
+        elif self.aggregator=="max":
+            logits=logits.view(-1,self.num_ntype,self.num_classes).max(1)[0]
+        
+        elif self.aggregator=="None":
+            logits=logits.view(-1, self.num_ntype,self.num_classes).flatten(1)
+
+
+
+        else:
+            raise NotImplementedError()
+        
+        return logits
 

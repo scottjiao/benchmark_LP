@@ -5,6 +5,95 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score, normalized_mutual_info_score, adjusted_rand_score
 from sklearn.cluster import KMeans
 from sklearn.svm import LinearSVC
+import os
+
+
+def count_torch_tensor(t):
+    t=t.flatten(0).cpu()
+    c={}
+    for n in t:
+        n=n.item()
+        if n not in c:
+            c[n]=0
+        c[n]+=1
+    c=sorted(list(c.items()),key=lambda x:x[0])
+    return c
+
+
+
+
+def strList(l):
+    return [str(x) for x in l]
+
+    
+def writeIntoCsvLogger(dictToWrite,file_name):
+    #read file
+    to_write_names=sorted(list(dictToWrite.keys()))
+    if not os.path.exists(file_name):
+        to_write_line=[]
+        for n in to_write_names:
+            to_write_line.append(dictToWrite[n])
+        with open(file_name,"w") as f:
+            f.write(  ",".join(strList(to_write_names)) +"\n")
+            f.write(  ",".join(strList(to_write_line)) +"\n")
+    else:
+        with open(file_name,"r") as f:
+            rec=[]
+            for line in f:
+                line=line.strip("\n").split(",")
+                rec.append(line)
+        #ensure they have same names
+        row_names=sorted(rec[0])
+        if to_write_names!=row_names:
+            collected_names_not_in=[]
+            for n in to_write_names:
+                if n not in row_names:
+                    for i,n_r in enumerate(rec):
+                        if i==0:
+                            rec[0].append(n)
+                        else:
+                            rec[i].append("")
+                row_names.append(n)
+            for n_r in row_names:
+                if n_r not in to_write_names:
+                    dictToWrite[n_r]=""
+                    to_write_names.append(n_r)
+            to_write_line=[]
+            for n in rec[0]:
+                to_write_line.append(dictToWrite[n])
+            rec.append(to_write_line)
+            with open(file_name,"w") as f:
+                for line_list in rec:
+                    f.write(  ",".join(strList(line_list)) +"\n")
+        else:
+            to_write_line=[]
+            for n in rec[0]:
+                to_write_line.append(dictToWrite[n])
+            with open(file_name,"a") as f:
+                f.write(  ",".join(strList(to_write_line)) +"\n")
+        re_order_csv(file_name)
+
+        
+def re_order_csv(file_name):
+    with open(file_name,"r") as f:
+        rec=[]
+        for line in f:
+            line=line.strip("\n").split(",")
+            rec.append(line)
+    row_names=sorted(enumerate(rec[0]),key=lambda x:x[1])
+    row_names_idx=[i[0] for i in row_names]    
+    row_names_=[i[1] for i in row_names]    
+    if row_names_idx==sorted(row_names_idx):
+        print("No need to reorder")
+        return None
+    else:
+        print("reordering")
+        with open(file_name,"w") as f:
+            for line_list in rec:
+                to_write_line=[ line_list[row_names_idx[i]]  for i in range(len(line_list))  ]
+                f.write(  ",".join(to_write_line) +"\n")
+
+
 
 
 def idx_to_one_hot(idx_arr):
