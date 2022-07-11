@@ -123,7 +123,7 @@ class slotGAT(nn.Module):
                  eindexer,
                  ae_layer=False,aggregator="average",semantic_trans="False",semantic_trans_normalize="row",attention_average="False",attention_mse_sampling_factor=0,attention_mse_weight_factor=0,attention_1_type_bigger_constraint=0,attention_0_type_bigger_constraint=0,predicted_by_slot="None",
                  addLogitsEpsilon=0,addLogitsTrain="None",get_out=[""],slot_attention="False",relevant_passing="False",
-                 decode='distmult',inProcessEmb="True"):
+                 decode='distmult',inProcessEmb="True",l2BySlot="False"):
         super(slotGAT, self).__init__()
         self.g = g
         self.num_layers = num_layers
@@ -296,8 +296,8 @@ class slotGAT(nn.Module):
         if l2BySlot=="False":
             return x / (torch.max(torch.norm(x, dim=1, keepdim=True), self.epsilon))
         elif l2BySlot=="True":
-            logits=logits.view(-1, self.num_ntype,self.num_classes)
-            x=x / (torch.max(torch.norm(x, dim=1, keepdim=True), self.epsilon))
+            x=x.view(-1, self.num_ntype,self.num_classes)
+            x=x / (torch.max(torch.norm(x, dim=2, keepdim=True), self.epsilon))
             x=x.flatten(1)
             return x
 
