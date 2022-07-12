@@ -136,6 +136,7 @@ def run_model_DBLP(args):
         res_n_type_mappings=False
         etype_specified_attention=False
         eindexer=None
+        prod_aggr=args.prod_aggr if args.prod_aggr!="None" else None
         if args.net=="myGAT":
             net = myGAT(g, args.edge_feats, len(dl.links['count'])*2+1, in_dims, args.hidden_dim, num_classes, args.num_layers, heads, F.elu, args.dropout, args.dropout, args.slope, False, 0., decode=args.decoder)
         elif args.net=="slotGAT":
@@ -143,7 +144,7 @@ def run_model_DBLP(args):
                  n_type_mappings,
                  res_n_type_mappings,
                  etype_specified_attention,
-                 eindexer,decode=args.decoder,aggregator=args.slot_aggregator,inProcessEmb=args.inProcessEmb,l2BySlot=args.l2BySlot)
+                 eindexer,decode=args.decoder,aggregator=args.slot_aggregator,inProcessEmb=args.inProcessEmb,l2BySlot=args.l2BySlot,prod_aggr=prod_aggr)
         print(net) if args.verbose=="True" else None
         
 
@@ -393,6 +394,7 @@ if __name__ == '__main__':
     ap.add_argument('--decoder', type=str, default='distmult')  
     ap.add_argument('--inProcessEmb', type=str, default='True')
     ap.add_argument('--l2BySlot', type=str, default='True')
+    ap.add_argument('--prod_aggr', type=str, default='None')
 
     ap.add_argument('--run', type=int, default=1)
     ap.add_argument('--repeat', type=int, default=10, help='Repeat the training and testing for N times. Default is 1.')
