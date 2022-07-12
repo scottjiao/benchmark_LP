@@ -18,7 +18,7 @@ prefix="technique_newCsv";specified_args=["dataset",   "net",      "slot_aggrega
 
 
 fixed_info={"task_property":prefix,"net":"slotGAT","slot_aggregator":"None","inProcessEmb":"False","l2BySlot":"True","prod_aggr":"sum"}
-task_space={"hidden-dim":"[64,128]","num-layers":"[2,3,4]","lr":"[1e-4,5e-4,1e-3]","weight-decay":"[1e-4,5e-4,1e-3]","feats-type":[1,2,3],"num-heads":[2,4],"epoch":[50,300],"decoder":["dot"],"batch-size":[8192]}
+task_space={"hidden-dim":"[64,128]","num-layers":"[2,3,4]","lr":"[1e-4,5e-4,1e-3]","weight-decay":"[1e-4,5e-4,1e-3]","feats-type":[3],"num-heads":[2,4],"epoch":[50,300],"decoder":["dot"],"batch-size":[8192]}
 
 gpus=["1"]
 total_trial_num=96 #useless

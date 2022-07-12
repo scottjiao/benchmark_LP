@@ -17,10 +17,10 @@ dataset_to_evaluate=[("LastFM_corrected",1,10)]   # dataset,worker_num,repeat
 prefix="technique_newCsv";specified_args=["dataset",   "net",      "slot_aggregator","inProcessEmb","l2BySlot","prod_aggr"]
 
 
-fixed_info={"task_property":prefix,"net":"slotGAT","slot_aggregator":"None","inProcessEmb":"False","l2BySlot":"True","prod_aggr":"max"}
+fixed_info={"task_property":prefix,"net":"slotGAT","slot_aggregator":"None","inProcessEmb":"False","l2BySlot":"True","prod_aggr":"mean"}
 task_space={"hidden-dim":"[64,128]","num-layers":"[2,3,4]","lr":"[1e-4,5e-4,1e-3]","weight-decay":"[1e-4,5e-4,1e-3]","feats-type":[3],"num-heads":[2,4],"epoch":[50,300],"decoder":["dot"],"batch-size":[8192]}
 
-gpus=["0"]
+gpus=["1"]
 total_trial_num=96 #useless
 
 def get_tasks(task_space):
