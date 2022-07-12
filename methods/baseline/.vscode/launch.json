@@ -19,9 +19,9 @@
                 "--inProcessEmb","False",
                 "--feats-type","2",
                 //"--dataset","LastFM",
-                "--net","slotGAT","--slot_aggregator","None","--l2BySlot","True",
+                "--net","slotGAT","--slot_aggregator","None","--l2BySlot","True","--prod_aggr","sum",
                 "--verbose","True",
-                "--gpu","1",
+                "--gpu","0",
                 "--repeat","2",
             ]
         }

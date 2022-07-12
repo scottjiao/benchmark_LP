@@ -23,10 +23,26 @@ class DistMult(nn.Module):
 class Dot(nn.Module):
     def __init__(self):
         super(Dot, self).__init__()
-    def forward(self, left_emb, right_emb, r_id):
-        left_emb = torch.unsqueeze(left_emb, 1)
-        right_emb = torch.unsqueeze(right_emb, 2)
-        return torch.bmm(left_emb, right_emb).squeeze()
+    def forward(self, left_emb, right_emb, r_id,slot_num=None,prod_aggr=None):
+        if not prod_aggr:
+            left_emb = torch.unsqueeze(left_emb, 1)
+            right_emb = torch.unsqueeze(right_emb, 2)
+            return torch.bmm(left_emb, right_emb).squeeze()
+        else:
+            left_emb = left_emb.view(-1,slot_num,int(left_emb.shape[1]/slot_num))
+            right_emb = right_emb.view(-1,int(right_emb.shape[1]/slot_num),slot_num)
+            x=torch.bmm(left_emb, right_emb)# num_nodes* num_slot*num_slot
+            x=torch.diagonal(x,0,1,2) 
+            if prod_aggr=="mean":
+                x=x.mean(1)
+            elif prod_aggr=="max":
+                x=x.max(1)[0]
+            elif prod_aggr=="sum":
+                x=x.sum(1)
+            else:
+                raise Exception()
+            return x
+
 
 class myGAT(nn.Module):
     def __init__(self,
@@ -123,7 +139,7 @@ class slotGAT(nn.Module):
                  eindexer,
                  ae_layer=False,aggregator="average",semantic_trans="False",semantic_trans_normalize="row",attention_average="False",attention_mse_sampling_factor=0,attention_mse_weight_factor=0,attention_1_type_bigger_constraint=0,attention_0_type_bigger_constraint=0,predicted_by_slot="None",
                  addLogitsEpsilon=0,addLogitsTrain="None",get_out=[""],slot_attention="False",relevant_passing="False",
-                 decode='distmult',inProcessEmb="True",l2BySlot="False"):
+                 decode='distmult',inProcessEmb="True",l2BySlot="False",prod_aggr=None):
         super(slotGAT, self).__init__()
         self.g = g
         self.num_layers = num_layers
@@ -148,6 +164,7 @@ class slotGAT(nn.Module):
         if relevant_passing=="True":
             assert slot_attention=="True"
         self.l2BySlot=l2BySlot
+        self.prod_aggr=prod_aggr
 
         #self.ae_drop=nn.Dropout(feat_drop)
         #if ae_layer=="last_hidden":
@@ -288,7 +305,7 @@ class slotGAT(nn.Module):
         o = torch.cat(emb, 1)
         left_emb = o[left]
         right_emb = o[right]
-        return self.decoder(left_emb, right_emb, mid)
+        return self.decoder(left_emb, right_emb, mid,slot_num=self.num_ntype,prod_aggr=self.prod_aggr)
 
 
     def l2_norm(self, x,l2BySlot="False"):
