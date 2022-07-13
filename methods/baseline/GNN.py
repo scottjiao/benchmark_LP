@@ -31,8 +31,8 @@ class Dot(nn.Module):
         else:
             left_emb = left_emb.view(-1,slot_num,int(left_emb.shape[1]/slot_num))
             right_emb = right_emb.view(-1,int(right_emb.shape[1]/slot_num),slot_num)
-            x=torch.bmm(left_emb, right_emb)# num_nodes* num_slot*num_slot
-            x=torch.diagonal(x,0,1,2) 
+            x=torch.bmm(left_emb, right_emb)# num_sampled_edges* num_slot*num_slot
+            x=torch.diagonal(x,0,1,2) # num_sampled_edges* num_slot
             if prod_aggr=="mean":
                 x=x.mean(1)
             elif prod_aggr=="max":
@@ -302,7 +302,11 @@ class slotGAT(nn.Module):
             emb.append(logits)
         else:
             emb=[logits]
-        o = torch.cat(emb, 1)
+        if self.aggregator=="None" and self.inProcessEmb=="True":
+            emb=[ x.view(-1, self.num_ntype,int(x.shape[1]/self.num_ntype))   for x in emb]
+            o = torch.cat(emb, 2).flatten(1)
+        else:
+            o = torch.cat(emb, 1)
         left_emb = o[left]
         right_emb = o[right]
         return self.decoder(left_emb, right_emb, mid,slot_num=self.num_ntype,prod_aggr=self.prod_aggr)

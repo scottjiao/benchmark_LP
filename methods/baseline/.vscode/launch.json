@@ -16,7 +16,7 @@
                 "--dataset","LastFM_corrected","--epoch","40","--num-layers","3","--weight-decay","2e-4","--batch-size","8192",
                 //"--decoder","dot",
                 "--decoder","dot",
-                "--inProcessEmb","False",
+                "--inProcessEmb","True",
                 "--feats-type","2",
                 //"--dataset","LastFM",
                 "--net","slotGAT","--slot_aggregator","None","--l2BySlot","True","--prod_aggr","sum",
