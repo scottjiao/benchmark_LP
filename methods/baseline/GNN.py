@@ -4,6 +4,7 @@ import torch.nn as nn
 import dgl
 from dgl.nn.pytorch import GraphConv
 
+import torch.nn.functional as F
 import dgl.function as fn
 from dgl.nn.pytorch import edge_softmax, GATConv
 from conv import myGATConv,slotGATConv
@@ -23,7 +24,7 @@ class DistMult(nn.Module):
 class Dot(nn.Module):
     def __init__(self):
         super(Dot, self).__init__()
-    def forward(self, left_emb, right_emb, r_id,slot_num=None,prod_aggr=None):
+    def forward(self, left_emb, right_emb, r_id,slot_num=None,prod_aggr=None,sigmoid="after"):
         if not prod_aggr:
             left_emb = torch.unsqueeze(left_emb, 1)
             right_emb = torch.unsqueeze(right_emb, 2)
@@ -33,6 +34,9 @@ class Dot(nn.Module):
             right_emb = right_emb.view(-1,int(right_emb.shape[1]/slot_num),slot_num)
             x=torch.bmm(left_emb, right_emb)# num_sampled_edges* num_slot*num_slot
             x=torch.diagonal(x,0,1,2) # num_sampled_edges* num_slot
+            if sigmoid=="before":
+                x=F.sigmoid(x)
+                
             if prod_aggr=="mean":
                 x=x.mean(1)
             elif prod_aggr=="max":
@@ -139,7 +143,7 @@ class slotGAT(nn.Module):
                  eindexer,
                  ae_layer=False,aggregator="average",semantic_trans="False",semantic_trans_normalize="row",attention_average="False",attention_mse_sampling_factor=0,attention_mse_weight_factor=0,attention_1_type_bigger_constraint=0,attention_0_type_bigger_constraint=0,predicted_by_slot="None",
                  addLogitsEpsilon=0,addLogitsTrain="None",get_out=[""],slot_attention="False",relevant_passing="False",
-                 decode='distmult',inProcessEmb="True",l2BySlot="False",prod_aggr=None):
+                 decode='distmult',inProcessEmb="True",l2BySlot="False",prod_aggr=None,sigmoid="after"):
         super(slotGAT, self).__init__()
         self.g = g
         self.num_layers = num_layers
@@ -165,6 +169,7 @@ class slotGAT(nn.Module):
             assert slot_attention=="True"
         self.l2BySlot=l2BySlot
         self.prod_aggr=prod_aggr
+        self.sigmoid=sigmoid
 
         #self.ae_drop=nn.Dropout(feat_drop)
         #if ae_layer=="last_hidden":
@@ -309,7 +314,15 @@ class slotGAT(nn.Module):
             o = torch.cat(emb, 1)
         left_emb = o[left]
         right_emb = o[right]
-        return self.decoder(left_emb, right_emb, mid,slot_num=self.num_ntype,prod_aggr=self.prod_aggr)
+        if self.sigmoid=="after":
+            logits=self.decoder(left_emb, right_emb, mid,slot_num=self.num_ntype,prod_aggr=self.prod_aggr)
+            logits=F.sigmoid(logits)
+        elif self.sigmoid=="before":
+            
+            logits=self.decoder(left_emb, right_emb, mid,slot_num=self.num_ntype,prod_aggr=self.prod_aggr,sigmoid=self.sigmoid)
+        else:
+            raise Exception()
+        return logits
 
 
     def l2_norm(self, x,l2BySlot="False"):

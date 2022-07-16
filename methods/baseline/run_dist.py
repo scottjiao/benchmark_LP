@@ -144,7 +144,7 @@ def run_model_DBLP(args):
                  n_type_mappings,
                  res_n_type_mappings,
                  etype_specified_attention,
-                 eindexer,decode=args.decoder,aggregator=args.slot_aggregator,inProcessEmb=args.inProcessEmb,l2BySlot=args.l2BySlot,prod_aggr=prod_aggr)
+                 eindexer,decode=args.decoder,aggregator=args.slot_aggregator,inProcessEmb=args.inProcessEmb,l2BySlot=args.l2BySlot,prod_aggr=prod_aggr,sigmoid=args.sigmoid)
         print(net) if args.verbose=="True" else None
         
 
@@ -202,7 +202,7 @@ def run_model_DBLP(args):
                 labels = torch.FloatTensor(np.concatenate([np.ones(train_pos_head.shape[0]), np.zeros(train_neg_head.shape[0])])).to(device)
 
                 logits = net(features_list, e_feat, left, right, mid)
-                logp = F.sigmoid(logits)
+                logp = logits
                 train_loss = loss_func(logp, labels)
 
                 # autograd
@@ -236,10 +236,10 @@ def run_model_DBLP(args):
                     mid = np.concatenate([valid_r_id, valid_r_id])
                     labels = torch.FloatTensor(np.concatenate([np.ones(valid_pos_head.shape[0]), np.zeros(valid_neg_head.shape[0])])).to(device)
                     logits = net(features_list, e_feat, left, right, mid)
-                    logp = F.sigmoid(logits)
+                    logp = logits
                     val_loss = loss_func(logp, labels)
 
-                    pred = F.sigmoid(logits).cpu().numpy()
+                    pred = logits.cpu().numpy()
                     edge_list = np.concatenate([left.reshape((1,-1)), right.reshape((1,-1))], axis=0)
                     labels = labels.cpu().numpy()
                     val_res = dl.evaluate(edge_list, pred, labels)
@@ -286,7 +286,7 @@ def run_model_DBLP(args):
                 mid[:] = test_edge_type
                 labels = torch.FloatTensor(test_label).to(device)
                 logits = net(features_list, e_feat, left, right, mid)
-                pred = F.sigmoid(logits).cpu().numpy()
+                pred = logits.cpu().numpy()
                 edge_list = np.concatenate([left.reshape((1,-1)), right.reshape((1,-1))], axis=0)
                 labels = labels.cpu().numpy()
                 dl.gen_file_for_evaluate(test_neigh, pred, test_edge_type, file_path=f"{args.dataset}_{args.run}.txt", flag=first_flag)
@@ -305,7 +305,7 @@ def run_model_DBLP(args):
                 mid[:] = test_edge_type
                 labels = torch.FloatTensor(test_label).to(device)
                 logits = net(features_list, e_feat, left, right, mid)
-                pred = F.sigmoid(logits).cpu().numpy()
+                pred = logits.cpu().numpy()
                 edge_list = np.concatenate([left.reshape((1,-1)), right.reshape((1,-1))], axis=0)
                 labels = labels.cpu().numpy()
                 res = dl.evaluate(edge_list, pred, labels)
@@ -395,6 +395,8 @@ if __name__ == '__main__':
     ap.add_argument('--inProcessEmb', type=str, default='True')
     ap.add_argument('--l2BySlot', type=str, default='True')
     ap.add_argument('--prod_aggr', type=str, default='None')
+    ap.add_argument('--sigmoid', type=str, default='After')
+
 
     ap.add_argument('--run', type=int, default=1)
     ap.add_argument('--repeat', type=int, default=10, help='Repeat the training and testing for N times. Default is 1.')
