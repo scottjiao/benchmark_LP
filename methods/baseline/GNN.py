@@ -33,10 +33,14 @@ class Dot(nn.Module):
             left_emb = left_emb.view(-1,slot_num,int(left_emb.shape[1]/slot_num))
             right_emb = right_emb.view(-1,int(right_emb.shape[1]/slot_num),slot_num)
             x=torch.bmm(left_emb, right_emb)# num_sampled_edges* num_slot*num_slot
+            if prod_aggr=="all":
+                x=x.flatten(1)
+                x=x.sum(1)
+                return x
             x=torch.diagonal(x,0,1,2) # num_sampled_edges* num_slot
             if sigmoid=="before":
                 x=F.sigmoid(x)
-                
+            
             if prod_aggr=="mean":
                 x=x.mean(1)
             elif prod_aggr=="max":

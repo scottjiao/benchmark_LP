@@ -34,6 +34,9 @@ def mat2tensor(mat):
         return torch.from_numpy(mat).type(torch.FloatTensor)
     return sp_to_spt(mat)
 
+
+torch.random.manual_seed(1234)
+
 def run_model_DBLP(args):
 
     os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu
@@ -122,7 +125,7 @@ def run_model_DBLP(args):
     
     toCsvRepetition=[]
     for re in range(args.repeat):
-            
+        print(f"re : {re} starts!\n\n\n")
         res_2hop = defaultdict(float)
         res_random = defaultdict(float)
         train_pos, valid_pos = dl.get_train_valid_pos()#edge_types=[test_edge_type])
@@ -330,18 +333,25 @@ def run_model_DBLP(args):
             "1_batchSize":args.batch_size,
             #"2_valAcc":val_results["acc"],
             #"2_valMiPre":val_results["micro-pre"],
-            "2_valLossNeg":-epoch_val_loss,
-            "2_valRocAucRandom":val_res_RocAucRandom,
-            "2_valMRRRandom":val_res_MRRRandom,
-            "3_testRocAuc2hop":res_2hop["roc_auc"],
-            "3_testMRR2hop":res_2hop["MRR"],
-            "3_testRocAucRandom":res_random["roc_auc"],
-            "3_testMRRRandom":res_random["MRR"],}
+            "2_valLossNeg_mean":-epoch_val_loss,
+            "2_valRocAucRandom_mean":val_res_RocAucRandom,
+            "2_valMRRRandom_mean":val_res_MRRRandom,
+            "3_testRocAuc2hop_mean":res_2hop["roc_auc"],
+            "3_testMRR2hop_mean":res_2hop["MRR"],
+            "3_testRocAucRandom_mean":res_random["roc_auc"],
+            "3_testMRRRandom_mean":res_random["MRR"],
+            "2_valLossNeg_std":-epoch_val_loss,
+            "2_valRocAucRandom_std":val_res_RocAucRandom,
+            "2_valMRRRandom_std":val_res_MRRRandom,
+            "3_testRocAuc2hop_std":res_2hop["roc_auc"],
+            "3_testMRR2hop_std":res_2hop["MRR"],
+            "3_testRocAucRandom_std":res_random["roc_auc"],
+            "3_testMRRRandom_std":res_random["MRR"],}
         toCsvRepetition.append(toCsv)
             
-        if early_stopping.early_stop:
-            print('Early stopping!')  if args.verbose=="True" else None
-            break
+        #if early_stopping.early_stop:
+            #print('Early stopping!')  if args.verbose=="True" else None
+            #break
     print(f"res_2hops {res_2hops}")  if args.verbose=="True" else None
     print(f"res_randoms {res_randoms}")  if args.verbose=="True" else None
 
@@ -354,13 +364,17 @@ def run_model_DBLP(args):
                 if name not in toCsvAveraged.keys():
                     toCsvAveraged[name]=[]
                 toCsvAveraged[name].append(tocsv[name])
-    
+    print(toCsvAveraged)
     for name in toCsvAveraged.keys():
         if not name.startswith("1_") :
             if type(toCsvAveraged[name][0]) is str:
                 toCsvAveraged[name]=toCsvAveraged[name][0]
             else:
-                toCsvAveraged[name]=sum(toCsvAveraged[name])/len(toCsvAveraged[name])
+                
+                if "_mean" in name:
+                    toCsvAveraged[name]=np.mean(np.array(toCsvAveraged[name])) 
+                elif "_std" in name:
+                    toCsvAveraged[name]= np.std(np.array(toCsvAveraged[name])) 
     #toCsvAveraged["5_expInfo"]=exp_info
 
     writeIntoCsvLogger(toCsvAveraged,f"./log/{args.study_name}.csv")
@@ -395,10 +409,11 @@ if __name__ == '__main__':
     ap.add_argument('--inProcessEmb', type=str, default='True')
     ap.add_argument('--l2BySlot', type=str, default='True')
     ap.add_argument('--prod_aggr', type=str, default='None')
-    ap.add_argument('--sigmoid', type=str, default='After')
+    ap.add_argument('--sigmoid', type=str, default='after')
 
 
     ap.add_argument('--run', type=int, default=1)
+    ap.add_argument('--cost', type=int, default=1)
     ap.add_argument('--repeat', type=int, default=10, help='Repeat the training and testing for N times. Default is 1.')
     
     ap.add_argument('--task_property', type=str, default="notSpecified")

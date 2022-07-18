@@ -1,5 +1,6 @@
 
-
+import random
+import queue
 import time
 import subprocess
 import multiprocessing
@@ -34,14 +35,14 @@ def expand_task(tasks,k,v):
     #if k.startswith("search_"):
         ##list
 
-
+"""
 class Run( multiprocessing.Process):
     def __init__(self,command):
         super().__init__()
         self.command=command
     def run(self):
         
-        subprocess.run(self.command,shell=True)
+        subprocess.run(self.command,shell=True)"""
 
 def proc_yes(yes,args_dict):
     temp_yes=[]
@@ -176,6 +177,79 @@ def get_best_hypers(dataset,net,yes,no):
             best_hypers["search_"+key]=f"""[{best[key]}]"""
     return best_hypers
 
+
+class Run( multiprocessing.Process):
+    def __init__(self,task,pool=0,idx=0,tc=0,start_time=0):
+        super().__init__()
+        self.task=task
+        self.log=os.path.join(task['study_name'])
+        self.idx=idx
+        self.pool=pool
+        self.device=None
+        self.tc=tc
+        self.start_time=start_time
+        #self.pbar=pbar
+    def run(self):
+        print(f"{'*'*10} study  {self.log} no.{self.idx} waiting for device")
+        count=0
+        device_units=[]
+        while True:
+            if len(device_units)>0:
+                try:
+                    unit=self.pool.get(timeout=10*random.random())
+                except queue.Empty:
+                    for unit in device_units:
+                            self.pool.put(unit)
+                    print(f"Hold {str(device_units)} and waiting for too long! Throw back and go to sleep")
+                    time.sleep(10*random.random())
+                    device_units=[]
+                    count=0
+                    continue
+            else:
+                unit=self.pool.get()
+            if len(device_units)>0:  # consistency check
+                if unit[0]!=device_units[-1][0]:
+                    print(f"Get {str(device_units)} and {unit} not consistent devices and throw back it")
+                    self.pool.put(unit)
+                    time.sleep(10*random.random())
+                    continue
+            count+=1
+            device_units.append(unit)
+            if count==self.task['cost']:
+                break
+
+
+        print(f"{'-'*10}  study  {self.log} no.{self.idx} get the devices {str(device_units)} and start working")
+        self.device=device_units[0][0]
+        try:
+            exit_command=get_command_from_argsDict(self.task,self.device)
+            
+            print(f"running: {exit_command}")
+            subprocess.run(exit_command,shell=True)
+        finally:
+            for unit in device_units:
+                self.pool.put(unit)
+            #localtime = time.asctime( time.localtime(time.time()) )
+        
+        end_time=time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        print(f"Start time: {self.start_time}\nEnd time: {end_time}\nwith {self.idx}/{self.tc} tasks")
+
+        print(f"  {'<'*10} end  study  {self.log} no.{self.idx} of command ")
+
+
+
+def get_command_from_argsDict(args_dict,gpu):
+    command='python -W ignore run_dist.py  '
+    for key in args_dict.keys():
+        command+=f" --{key} {args_dict[key]} "
+
+
+    command+=f" --gpu {gpu} "
+    command+=f"   > ./log/{args_dict['study_name']}.txt  "
+    return command
+
+
+
 def run_command_in_parallel(args_dict,gpus,worker_num):
 
 
@@ -201,6 +275,9 @@ def run_command_in_parallel(args_dict,gpus,worker_num):
     for p in process_queue:
         p.join()
 
+
+
+
 def config_study_name(prefix,specified_args,extract_dict):
     study_name=prefix
     for k in specified_args:
@@ -210,65 +287,3 @@ def config_study_name(prefix,specified_args,extract_dict):
         study_name=study_name.replace("_","",1)
     study_storage=f"sqlite:///db/{study_name}.db"
     return study_name,study_storage
-
-if __name__ == '__main__':
-    
-    
-    dataset_to_evaluate=[("IMDB_corrected",1,10),]  # dataset,worker_num,repeat
-
-    prefix="get_results";specified_args=["dataset",   "net",    "feats-type",     "slot_aggregator",     "predicted_by_slot"]
-
-
-    fixed_info={"task_property":prefix,"net":"slotGAT","slot_aggregator":"average"}
-    task_to_evaluate=[
-    {"feats-type":"0","predicted_by_slot":"0"},
-    {"feats-type":"0","predicted_by_slot":"1"},
-    {"feats-type":"1","predicted_by_slot":"0"},
-    {"feats-type":"1","predicted_by_slot":"1"},
-    ]
-    gpus=["0"]
-    total_trial_num=1
-
-
-
-
-
-
-
-
-
-
-
-
-
-    for dataset,worker_num,repeat in dataset_to_evaluate:
-        for task in task_to_evaluate:
-            args_dict={}
-            for dict_to_add in [task,fixed_info]:
-                for k,v in dict_to_add.items():
-                    args_dict[k]=v
-            net=args_dict['net']
-            yes=["technique",f"feat_type_{args_dict['feats-type']}",f"aggr_{args_dict['slot_aggregator']}"]
-            no=["attantion_average","attention_average","attention_mse","edge_feat_0","oracle"]
-            best_hypers=get_best_hypers(dataset,net,yes,no)
-            for dict_to_add in [best_hypers]:
-                for k,v in dict_to_add.items():
-                    args_dict[k]=v
-            trial_num=int(total_trial_num/ (len(gpus)*worker_num) )
-            if trial_num<=1:
-                trial_num=1
-
-            args_dict['dataset']=dataset
-            args_dict['trial_num']=trial_num
-            args_dict['repeat']=repeat
-
-            study_name,study_storage=config_study_name(prefix=prefix,specified_args=specified_args,extract_dict=args_dict)
-            #study_name=f"get_embeddings_{dataset}_net_{task['net']}_feats_type_{task['feats-type']}_slot_aggregator{task['slot_aggregator']}"
-            #study_storage=f"sqlite:///db/{study_name}.db"
-            
-            args_dict['study_name']=study_name
-            args_dict['study_storage']=study_storage
-
-
-
-            run_command_in_parallel(args_dict,gpus,worker_num)
