@@ -35,7 +35,7 @@ def mat2tensor(mat):
     return sp_to_spt(mat)
 
 
-torch.random.manual_seed(1234)
+torch.random.manual_seed(2022)
 
 def run_model_DBLP(args):
 
@@ -157,10 +157,17 @@ def run_model_DBLP(args):
 
         # training loop
         net.train()
-        t=time.localtime()
-        str_t=f"{t.tm_year:0>4d}{t.tm_mon:0>2d}{t.tm_hour:0>2d}{t.tm_min:0>2d}{t.tm_sec:0>2d}{int(time.time()*1000)%1000}"
-        ckp_dname=os.path.join('checkpoint',str_t)
-        os.mkdir(ckp_dname)
+        try:
+            t=time.localtime()
+            str_t=f"{t.tm_year:0>4d}{t.tm_mon:0>2d}{t.tm_hour:0>2d}{t.tm_min:0>2d}{t.tm_sec:0>2d}{int(time.time()*1000)%1000}"
+            ckp_dname=os.path.join('checkpoint',str_t)
+            os.mkdir(ckp_dname)
+        except:
+            time.sleep(1)
+            t=time.localtime()
+            str_t=f"{t.tm_year:0>4d}{t.tm_mon:0>2d}{t.tm_hour:0>2d}{t.tm_min:0>2d}{t.tm_sec:0>2d}{int(time.time()*1000)%1000}"
+            ckp_dname=os.path.join('checkpoint',str_t)
+            os.mkdir(ckp_dname)
         ckp_fname=os.path.join(ckp_dname,'checkpoint_{}_{}_re_{}_feat_{}_heads_{}_{}.pt'.format(args.dataset, args.num_layers,re,args.feats_type,args.num_heads,net.__class__.__name__))
         
         early_stopping = EarlyStopping(patience=args.patience, verbose=True, save_path=ckp_fname)
