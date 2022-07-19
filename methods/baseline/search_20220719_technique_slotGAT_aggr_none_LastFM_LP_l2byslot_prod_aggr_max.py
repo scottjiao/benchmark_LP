@@ -13,12 +13,12 @@ gpus="0 1"
 load=3
 #dataset_to_evaluate=[("IMDB_corrected",1,10),("ACM_corrected",1,10),("DBLP_corrected",1,10),("pubmed_HNE_complete",1,20),]   # dataset,worker_num,repeat
 
-dataset_to_evaluate=[("LastFM_corrected",1,10)]   # dataset,cost,repeat
+dataset_to_evaluate=[("LastFM_corrected",1,20)]   # dataset,cost,repeat
 
 prefix="technique_newCsv";specified_args=["dataset",   "net",      "slot_aggregator","inProcessEmb","l2BySlot","prod_aggr"]
 
 
-fixed_info={"task_property":prefix,"net":"slotGAT","slot_aggregator":"None","inProcessEmb":"True","l2BySlot":"True","prod_aggr":"sum"}
+fixed_info={"task_property":prefix,"net":"slotGAT","slot_aggregator":"None","inProcessEmb":"True","l2BySlot":"True","prod_aggr":"max"}
 task_space={"hidden-dim":"[64,128]","num-layers":"[3,4]","lr":"[5e-4,1e-3,5e-3]","weight-decay":"[5e-4,1e-3,5e-3]","feats-type":[3],"num-heads":[2,4],"epoch":[300],"decoder":["dot"],"batch-size":[8192]}
 
 #gpus=["0"]

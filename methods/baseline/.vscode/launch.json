@@ -21,7 +21,7 @@
                 //"--dataset","LastFM",
                 "--net","slotGAT","--slot_aggregator","None","--l2BySlot","True","--prod_aggr","mean","--sigmoid","before",
                 "--verbose","True",
-                "--gpu","0",
+                "--gpu","1",
                 "--repeat","2",
             ]
         }

@@ -40,6 +40,7 @@ torch.random.manual_seed(2022)
 def run_model_DBLP(args):
 
     os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu
+    torch.cuda.set_device(int(args.gpu))
     feats_type = args.feats_type
     features_list, adjM, dl = load_data(args.dataset)
     device = torch.device('cuda' if (torch.cuda.is_available() and args.gpu!="cpu") else 'cpu')
