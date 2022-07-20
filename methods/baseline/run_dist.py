@@ -40,7 +40,10 @@ torch.random.manual_seed(2022)
 def run_model_DBLP(args):
 
     os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu
-    torch.cuda.set_device(int(args.gpu))
+    try:
+        torch.cuda.set_device(int(args.gpu))
+    except :
+        pass
     feats_type = args.feats_type
     features_list, adjM, dl = load_data(args.dataset)
     device = torch.device('cuda' if (torch.cuda.is_available() and args.gpu!="cpu") else 'cpu')
@@ -148,7 +151,7 @@ def run_model_DBLP(args):
                  n_type_mappings,
                  res_n_type_mappings,
                  etype_specified_attention,
-                 eindexer,decode=args.decoder,aggregator=args.slot_aggregator,inProcessEmb=args.inProcessEmb,l2BySlot=args.l2BySlot,prod_aggr=prod_aggr,sigmoid=args.sigmoid)
+                 eindexer,decode=args.decoder,aggregator=args.slot_aggregator,inProcessEmb=args.inProcessEmb,l2BySlot=args.l2BySlot,prod_aggr=prod_aggr,sigmoid=args.sigmoid,l2use=args.l2use,logitsRescale=args.logitsRescale)
         print(net) if args.verbose=="True" else None
         
 
@@ -416,8 +419,10 @@ if __name__ == '__main__':
     ap.add_argument('--decoder', type=str, default='distmult')  
     ap.add_argument('--inProcessEmb', type=str, default='True')
     ap.add_argument('--l2BySlot', type=str, default='True')
+    ap.add_argument('--l2use', type=str, default='True')
     ap.add_argument('--prod_aggr', type=str, default='None')
     ap.add_argument('--sigmoid', type=str, default='after')
+    ap.add_argument('--logitsRescale', type=str, default='None')
 
 
     ap.add_argument('--run', type=int, default=1)

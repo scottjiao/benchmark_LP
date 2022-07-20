@@ -24,7 +24,7 @@ class DistMult(nn.Module):
 class Dot(nn.Module):
     def __init__(self):
         super(Dot, self).__init__()
-    def forward(self, left_emb, right_emb, r_id,slot_num=None,prod_aggr=None,sigmoid="after"):
+    def forward(self, left_emb, right_emb, r_id,slot_num=None,prod_aggr=None,sigmoid="after",logitsRescale="None"):
         if not prod_aggr:
             left_emb = torch.unsqueeze(left_emb, 1)
             right_emb = torch.unsqueeze(right_emb, 2)
@@ -43,12 +43,18 @@ class Dot(nn.Module):
             
             if prod_aggr=="mean":
                 x=x.mean(1)
+                
             elif prod_aggr=="max":
                 x=x.max(1)[0]
             elif prod_aggr=="sum":
                 x=x.sum(1)
             else:
                 raise Exception()
+            if logitsRescale=="slotNum":
+                x= x/(slot_num*2)+1/2
+                if x.max()>1+3e-1 or x.min()<0-3e-1:
+                    raise Exception()
+                x=torch.clamp( x,0,1)
             return x
 
 
@@ -147,7 +153,7 @@ class slotGAT(nn.Module):
                  eindexer,
                  ae_layer=False,aggregator="average",semantic_trans="False",semantic_trans_normalize="row",attention_average="False",attention_mse_sampling_factor=0,attention_mse_weight_factor=0,attention_1_type_bigger_constraint=0,attention_0_type_bigger_constraint=0,predicted_by_slot="None",
                  addLogitsEpsilon=0,addLogitsTrain="None",get_out=[""],slot_attention="False",relevant_passing="False",
-                 decode='distmult',inProcessEmb="True",l2BySlot="False",prod_aggr=None,sigmoid="after"):
+                 decode='distmult',inProcessEmb="True",l2BySlot="False",prod_aggr=None,sigmoid="after",l2use="True",logitsRescale="None"):
         super(slotGAT, self).__init__()
         self.g = g
         self.num_layers = num_layers
@@ -174,7 +180,8 @@ class slotGAT(nn.Module):
         self.l2BySlot=l2BySlot
         self.prod_aggr=prod_aggr
         self.sigmoid=sigmoid
-
+        self.l2use=l2use
+        self.logitsRescale=logitsRescale
         #self.ae_drop=nn.Dropout(feat_drop)
         #if ae_layer=="last_hidden":
             #self.lc_ae=nn.ModuleList([nn.Linear(num_hidden * heads[-2],num_hidden, bias=True),nn.Linear(num_hidden,num_ntype, bias=True)])
@@ -319,11 +326,15 @@ class slotGAT(nn.Module):
         left_emb = o[left]
         right_emb = o[right]
         if self.sigmoid=="after":
-            logits=self.decoder(left_emb, right_emb, mid,slot_num=self.num_ntype,prod_aggr=self.prod_aggr)
+            logits=self.decoder(left_emb, right_emb, mid,slot_num=self.num_ntype,prod_aggr=self.prod_aggr,logitsRescale=self.logitsRescale)
             logits=F.sigmoid(logits)
         elif self.sigmoid=="before":
             
-            logits=self.decoder(left_emb, right_emb, mid,slot_num=self.num_ntype,prod_aggr=self.prod_aggr,sigmoid=self.sigmoid)
+            logits=self.decoder(left_emb, right_emb, mid,slot_num=self.num_ntype,prod_aggr=self.prod_aggr,sigmoid=self.sigmoid,logitsRescale=self.logitsRescale)
+        elif self.sigmoid=="None":
+            left_emb=self.l2_norm(left_emb,l2BySlot=self.l2BySlot)
+            right_emb=self.l2_norm(right_emb,l2BySlot=self.l2BySlot)
+            logits=self.decoder(left_emb, right_emb, mid,slot_num=self.num_ntype,prod_aggr=self.prod_aggr,logitsRescale=self.logitsRescale)
         else:
             raise Exception()
         return logits
@@ -331,13 +342,18 @@ class slotGAT(nn.Module):
 
     def l2_norm(self, x,l2BySlot="False"):
         # This is an equivalent replacement for tf.l2_normalize, see https://www.tensorflow.org/versions/r1.15/api_docs/python/tf/math/l2_normalize for more information.
-        if l2BySlot=="False":
-            return x / (torch.max(torch.norm(x, dim=1, keepdim=True), self.epsilon))
-        elif l2BySlot=="True":
-            x=x.view(-1, self.num_ntype,self.num_classes)
-            x=x / (torch.max(torch.norm(x, dim=2, keepdim=True), self.epsilon))
-            x=x.flatten(1)
+        if self.l2use=="True":
+            if l2BySlot=="False":
+                return x / (torch.max(torch.norm(x, dim=1, keepdim=True), self.epsilon))
+            elif l2BySlot=="True":
+                x=x.view(-1, self.num_ntype,int(x.shape[1]/self.num_ntype))
+                x=x / (torch.max(torch.norm(x, dim=2, keepdim=True), self.epsilon))
+                x=x.flatten(1)
+                return x
+        elif self.l2use=="False":
             return x
+        else:
+            raise Exception()
 
 
     def aggr_func(self,logits):

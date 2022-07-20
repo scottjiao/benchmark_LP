@@ -19,7 +19,7 @@
                 "--inProcessEmb","True",
                 "--feats-type","2",
                 //"--dataset","LastFM",
-                "--net","slotGAT","--slot_aggregator","None","--l2BySlot","True","--prod_aggr","mean","--sigmoid","before",
+                "--net","slotGAT","--slot_aggregator","None","--l2BySlot","True","--prod_aggr","sum","--sigmoid","None","--logitsRescale","slotNum",
                 "--verbose","True",
                 "--gpu","1",
                 "--repeat","2",
