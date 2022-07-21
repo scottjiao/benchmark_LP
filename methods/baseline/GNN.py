@@ -74,12 +74,14 @@ class myGAT(nn.Module):
                  negative_slope,
                  residual,
                  alpha,
-                 decode='distmult'):
+                 decode='distmult',inProcessEmb="True",l2use="True"):
         super(myGAT, self).__init__()
         self.g = g
         self.num_layers = num_layers
         self.gat_layers = nn.ModuleList()
         self.activation = activation
+        self.inProcessEmb=inProcessEmb
+        self.l2use=l2use
         self.fc_list = nn.ModuleList([nn.Linear(in_dim, num_hidden, bias=True) for in_dim in in_dims])
         for fc in self.fc_list:
             nn.init.xavier_normal_(fc.weight, gain=1.414)
@@ -126,7 +128,7 @@ class myGAT(nn.Module):
         logits = torch.cat(emb, 1)
         left_emb = logits[left]
         right_emb = logits[right]
-        return self.decoder(left_emb, right_emb, mid)
+        return F.sigmoid(self.decoder(left_emb, right_emb, mid))
 
 
        
