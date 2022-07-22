@@ -9,7 +9,7 @@ import os
 import copy
 #time.sleep(60*60*4)
 
-resources_dict={"0":1,"1":3}   #id:load
+1resources_dict={"0":3,"1":2}   #id:load
 #dataset_to_evaluate=[("IMDB_corrected",1,10),("ACM_corrected",1,10),("DBLP_corrected",1,10),("pubmed_HNE_complete",1,20),]   # dataset,worker_num,repeat
 
 dataset_to_evaluate=[("LastFM_corrected",1,10)]   # dataset,cost,repeat
