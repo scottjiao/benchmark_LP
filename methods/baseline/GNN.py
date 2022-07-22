@@ -54,6 +54,7 @@ class Dot(nn.Module):
                 x= x/(slot_num*2)+1/2
                 if x.max()>1+3e-1 or x.min()<0-3e-1:
                     raise Exception()
+                #print(f"max: {x.max()} min: {x.min()}")
                 x=torch.clamp( x,0,1)
             return x
 
@@ -74,12 +75,14 @@ class myGAT(nn.Module):
                  negative_slope,
                  residual,
                  alpha,
-                 decode='distmult'):
+                 decode='distmult',inProcessEmb="True",l2use="True"):
         super(myGAT, self).__init__()
         self.g = g
         self.num_layers = num_layers
         self.gat_layers = nn.ModuleList()
         self.activation = activation
+        self.inProcessEmb=inProcessEmb
+        self.l2use=l2use
         self.fc_list = nn.ModuleList([nn.Linear(in_dim, num_hidden, bias=True) for in_dim in in_dims])
         for fc in self.fc_list:
             nn.init.xavier_normal_(fc.weight, gain=1.414)
@@ -126,7 +129,7 @@ class myGAT(nn.Module):
         logits = torch.cat(emb, 1)
         left_emb = logits[left]
         right_emb = logits[right]
-        return self.decoder(left_emb, right_emb, mid)
+        return F.sigmoid(self.decoder(left_emb, right_emb, mid))
 
 
        
@@ -153,7 +156,7 @@ class slotGAT(nn.Module):
                  eindexer,
                  ae_layer=False,aggregator="average",semantic_trans="False",semantic_trans_normalize="row",attention_average="False",attention_mse_sampling_factor=0,attention_mse_weight_factor=0,attention_1_type_bigger_constraint=0,attention_0_type_bigger_constraint=0,predicted_by_slot="None",
                  addLogitsEpsilon=0,addLogitsTrain="None",get_out=[""],slot_attention="False",relevant_passing="False",
-                 decode='distmult',inProcessEmb="True",l2BySlot="False",prod_aggr=None,sigmoid="after",l2use="True",logitsRescale="None"):
+                 decode='distmult',inProcessEmb="True",l2BySlot="False",prod_aggr=None,sigmoid="after",l2use="True",logitsRescale="None",HANattDim=128):
         super(slotGAT, self).__init__()
         self.g = g
         self.num_layers = num_layers
@@ -182,6 +185,7 @@ class slotGAT(nn.Module):
         self.sigmoid=sigmoid
         self.l2use=l2use
         self.logitsRescale=logitsRescale
+        self.HANattDim=HANattDim
         #self.ae_drop=nn.Dropout(feat_drop)
         #if ae_layer=="last_hidden":
             #self.lc_ae=nn.ModuleList([nn.Linear(num_hidden * heads[-2],num_hidden, bias=True),nn.Linear(num_hidden,num_ntype, bias=True)])
@@ -203,8 +207,15 @@ class slotGAT(nn.Module):
             num_hidden* heads[-2] , num_classes, heads[-1],
             feat_drop, attn_drop, negative_slope, residual, None, alpha=alpha,num_ntype=num_ntype,n_type_mappings=n_type_mappings,res_n_type_mappings=res_n_type_mappings,etype_specified_attention=etype_specified_attention,eindexer=eindexer,semantic_trans=semantic_trans,semantic_trans_normalize=semantic_trans_normalize,attention_average=attention_average,attention_mse_sampling_factor=attention_mse_sampling_factor,attention_mse_weight_factor=attention_mse_weight_factor,attention_1_type_bigger_constraint=attention_1_type_bigger_constraint,attention_0_type_bigger_constraint=attention_0_type_bigger_constraint,slot_attention=slot_attention,relevant_passing=relevant_passing))
         self.aggregator=aggregator
+        if aggregator=="HAN":
+            if self.inProcessEmb=="True":
+                last_dim=num_hidden*(2+num_layers)
+            else:
+                last_dim=self.num_hidden
+            self.macroLinear=nn.Linear(last_dim, self.HANattDim, bias=True);nn.init.xavier_normal_(self.macroLinear.weight, gain=1.414)
+            self.macroSemanticVec=nn.Parameter(torch.FloatTensor(self.HANattDim,1));nn.init.normal_(self.macroSemanticVec,std=1)
         self.by_slot=[f"by_slot_{nt}" for nt in range(g.num_ntypes)]
-        assert aggregator in (["onedimconv","average","last_fc","slot_majority_voting","max","None"]+self.by_slot)
+        assert aggregator in (["onedimconv","average","last_fc","slot_majority_voting","max","None","HAN"]+self.by_slot)
         if self.aggregator=="onedimconv":
             self.nt_aggr=nn.Parameter(torch.FloatTensor(1,1,self.num_ntype,1));nn.init.normal_(self.nt_aggr,std=1)
         #self.get_out=get_out
@@ -323,6 +334,13 @@ class slotGAT(nn.Module):
             o = torch.cat(emb, 2).flatten(1)
         else:
             o = torch.cat(emb, 1)
+
+        if self.aggregator=="HAN" :
+            o=o.view(-1, self.num_ntype,int(o.shape[1]/self.num_ntype))
+            slot_scores=(F.tanh( self.macroLinear(o))  @  self.macroSemanticVec).mean(0,keepdim=True)  #num_slots
+            self.slot_scores=F.softmax(slot_scores,dim=1)
+            o=(o*self.slot_scores).sum(1)
+
         left_emb = o[left]
         right_emb = o[right]
         if self.sigmoid=="after":
@@ -368,7 +386,7 @@ class slotGAT(nn.Module):
         elif self.aggregator=="max":
             logits=logits.view(-1,self.num_ntype,self.num_classes).max(1)[0]
         
-        elif self.aggregator=="None":
+        elif self.aggregator=="None" or "HAN":
             logits=logits.view(-1, self.num_ntype,self.num_classes).flatten(1)
 
 

@@ -151,7 +151,7 @@ def run_model_DBLP(args):
                  n_type_mappings,
                  res_n_type_mappings,
                  etype_specified_attention,
-                 eindexer,decode=args.decoder,aggregator=args.slot_aggregator,inProcessEmb=args.inProcessEmb,l2BySlot=args.l2BySlot,prod_aggr=prod_aggr,sigmoid=args.sigmoid,l2use=args.l2use,logitsRescale=args.logitsRescale)
+                 eindexer,decode=args.decoder,aggregator=args.slot_aggregator,inProcessEmb=args.inProcessEmb,l2BySlot=args.l2BySlot,prod_aggr=prod_aggr,sigmoid=args.sigmoid,l2use=args.l2use,logitsRescale=args.logitsRescale,HANattDim=args.HANattDim)
         print(net) if args.verbose=="True" else None
         
 
@@ -423,6 +423,9 @@ if __name__ == '__main__':
     ap.add_argument('--prod_aggr', type=str, default='None')
     ap.add_argument('--sigmoid', type=str, default='after')
     ap.add_argument('--logitsRescale', type=str, default='None')
+    #ap.add_argument('--macroAggr', type=str, default='None')
+
+    
 
 
     ap.add_argument('--run', type=int, default=1)
@@ -434,7 +437,9 @@ if __name__ == '__main__':
     ap.add_argument('--study_storage', type=str, default="sqlite:///db/temp.db")
     ap.add_argument('--residual', type=str, default="True")
 
-    ap.add_argument('--slot_aggregator', type=str, default="None")
+
+    ap.add_argument('--HANattDim', type=int, default=128)
+    ap.add_argument('--slot_aggregator', type=str, default="HAN")
     ap.add_argument('--slot_attention', type=str, default="False") #
     ap.add_argument('--predicted_by_slot', type=str, default="None")
     ap.add_argument('--relevant_passing', type=str, default="False") #
