@@ -75,7 +75,7 @@ class myGAT(nn.Module):
                  negative_slope,
                  residual,
                  alpha,
-                 decode='distmult',inProcessEmb="True",l2use="True"):
+                 decode='distmult',inProcessEmb="True",l2use="True",dataRecorder=None):
         super(myGAT, self).__init__()
         self.g = g
         self.num_layers = num_layers
@@ -83,6 +83,7 @@ class myGAT(nn.Module):
         self.activation = activation
         self.inProcessEmb=inProcessEmb
         self.l2use=l2use
+        self.dataRecorder=dataRecorder
         self.fc_list = nn.ModuleList([nn.Linear(in_dim, num_hidden, bias=True) for in_dim in in_dims])
         for fc in self.fc_list:
             nn.init.xavier_normal_(fc.weight, gain=1.414)
@@ -156,7 +157,7 @@ class slotGAT(nn.Module):
                  eindexer,
                  ae_layer=False,aggregator="average",semantic_trans="False",semantic_trans_normalize="row",attention_average="False",attention_mse_sampling_factor=0,attention_mse_weight_factor=0,attention_1_type_bigger_constraint=0,attention_0_type_bigger_constraint=0,predicted_by_slot="None",
                  addLogitsEpsilon=0,addLogitsTrain="None",get_out=[""],slot_attention="False",relevant_passing="False",
-                 decode='distmult',inProcessEmb="True",l2BySlot="False",prod_aggr=None,sigmoid="after",l2use="True",logitsRescale="None",HANattDim=128):
+                 decode='distmult',inProcessEmb="True",l2BySlot="False",prod_aggr=None,sigmoid="after",l2use="True",logitsRescale="None",HANattDim=128,dataRecorder=None):
         super(slotGAT, self).__init__()
         self.g = g
         self.num_layers = num_layers
@@ -186,6 +187,7 @@ class slotGAT(nn.Module):
         self.l2use=l2use
         self.logitsRescale=logitsRescale
         self.HANattDim=HANattDim
+        self.dataRecorder=dataRecorder
         #self.ae_drop=nn.Dropout(feat_drop)
         #if ae_layer=="last_hidden":
             #self.lc_ae=nn.ModuleList([nn.Linear(num_hidden * heads[-2],num_hidden, bias=True),nn.Linear(num_hidden,num_ntype, bias=True)])
@@ -211,7 +213,7 @@ class slotGAT(nn.Module):
             if self.inProcessEmb=="True":
                 last_dim=num_hidden*(2+num_layers)
             else:
-                last_dim=self.num_hidden
+                last_dim=num_hidden
             self.macroLinear=nn.Linear(last_dim, self.HANattDim, bias=True);nn.init.xavier_normal_(self.macroLinear.weight, gain=1.414)
             self.macroSemanticVec=nn.Parameter(torch.FloatTensor(self.HANattDim,1));nn.init.normal_(self.macroSemanticVec,std=1)
         self.by_slot=[f"by_slot_{nt}" for nt in range(g.num_ntypes)]
@@ -345,6 +347,8 @@ class slotGAT(nn.Module):
         right_emb = o[right]
         if self.sigmoid=="after":
             logits=self.decoder(left_emb, right_emb, mid,slot_num=self.num_ntype,prod_aggr=self.prod_aggr,logitsRescale=self.logitsRescale)
+            if "Test" in self.dataRecorder["status"] and self.dataRecorder["meta"]["getLogitsDistBeforeSigmoid"]=="True":
+                self.dataRecorder["data"][f"{self.dataRecorder['status']}_logits"]=logits.cpu() #count dist
             logits=F.sigmoid(logits)
         elif self.sigmoid=="before":
             

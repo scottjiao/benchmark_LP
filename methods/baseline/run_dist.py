@@ -2,13 +2,13 @@ import sys
 sys.path.append('../../')
 import time
 import argparse
-
+import json
 from collections import defaultdict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from utils.tools import writeIntoCsvLogger
+from utils.tools import writeIntoCsvLogger,vis_data_collector
 from utils.pytorchtools import EarlyStopping
 from utils.data import load_data
 from GNN import myGAT,slotGAT
@@ -38,8 +38,13 @@ def mat2tensor(mat):
 torch.random.manual_seed(2022)
 
 def run_model_DBLP(args):
-
+    dataRecorder={"meta":{
+        "getLogitsDistBeforeSigmoid":args.getLogitsDistBeforeSigmoid,
+    },"data":{},"status":"None"}
     os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu
+    exp_info=f"exp setting: {vars(args)}"
+    vis_data_saver=vis_data_collector()
+    vis_data_saver.save_meta(exp_info,"exp_info")
     try:
         torch.cuda.set_device(int(args.gpu))
     except :
@@ -145,13 +150,13 @@ def run_model_DBLP(args):
         eindexer=None
         prod_aggr=args.prod_aggr if args.prod_aggr!="None" else None
         if args.net=="myGAT":
-            net = myGAT(g, args.edge_feats, len(dl.links['count'])*2+1, in_dims, args.hidden_dim, num_classes, args.num_layers, heads, F.elu, args.dropout, args.dropout, args.slope, False, 0., decode=args.decoder)
+            net = myGAT(g, args.edge_feats, len(dl.links['count'])*2+1, in_dims, args.hidden_dim, num_classes, args.num_layers, heads, F.elu, args.dropout, args.dropout, args.slope, False, 0., decode=args.decoder,dataRecorder=dataRecorder)
         elif args.net=="slotGAT":
             net = slotGAT(g, args.edge_feats, len(dl.links['count'])*2+1, in_dims, args.hidden_dim, num_classes, args.num_layers, heads, F.elu, args.dropout, args.dropout, args.slope, True, 0.05, num_ntype,
                  n_type_mappings,
                  res_n_type_mappings,
                  etype_specified_attention,
-                 eindexer,decode=args.decoder,aggregator=args.slot_aggregator,inProcessEmb=args.inProcessEmb,l2BySlot=args.l2BySlot,prod_aggr=prod_aggr,sigmoid=args.sigmoid,l2use=args.l2use,logitsRescale=args.logitsRescale,HANattDim=args.HANattDim)
+                 eindexer,decode=args.decoder,aggregator=args.slot_aggregator,inProcessEmb=args.inProcessEmb,l2BySlot=args.l2BySlot,prod_aggr=prod_aggr,sigmoid=args.sigmoid,l2use=args.l2use,logitsRescale=args.logitsRescale,HANattDim=args.HANattDim,dataRecorder=dataRecorder)
         print(net) if args.verbose=="True" else None
         
 
@@ -299,7 +304,9 @@ def run_model_DBLP(args):
                 mid = np.zeros(left.shape[0], dtype=np.int32)
                 mid[:] = test_edge_type
                 labels = torch.FloatTensor(test_label).to(device)
+                net.dataRecorder["status"]="Test2Hop"
                 logits = net(features_list, e_feat, left, right, mid)
+                net.dataRecorder["status"]="None"
                 pred = logits.cpu().numpy()
                 edge_list = np.concatenate([left.reshape((1,-1)), right.reshape((1,-1))], axis=0)
                 labels = labels.cpu().numpy()
@@ -318,7 +325,9 @@ def run_model_DBLP(args):
                 mid = np.zeros(left.shape[0], dtype=np.int32)
                 mid[:] = test_edge_type
                 labels = torch.FloatTensor(test_label).to(device)
+                net.dataRecorder["status"]="TestRandom"
                 logits = net(features_list, e_feat, left, right, mid)
+                net.dataRecorder["status"]="None"
                 pred = logits.cpu().numpy()
                 edge_list = np.concatenate([left.reshape((1,-1)), right.reshape((1,-1))], axis=0)
                 labels = labels.cpu().numpy()
@@ -359,6 +368,16 @@ def run_model_DBLP(args):
             "3_testRocAucRandom_std":res_random["roc_auc"],
             "3_testMRRRandom_std":res_random["MRR"],}
         toCsvRepetition.append(toCsv)
+
+
+        #net.dataRecorder["data"]["Test2Hop_logits"]
+        if args.getLogitsDistBeforeSigmoid=="True":
+            test2HopDist= torch.histogram(net.dataRecorder["data"]["Test2Hop_logits"],bins=60,range=(-30,30))
+            test2HopDist=[(f"{test2HopDist[1][i].item()}-{test2HopDist[1][i+1].item()}",test2HopDist[0][i].item()) for i in range(len(test2HopDist[0]))]
+            vis_data_saver.collect_in_run(test2HopDist,"test2Hopdist",re=re)
+            testRandomdist= torch.histogram(net.dataRecorder["data"]["TestRandom_logits"],bins=60,range=(-30,30))
+            testRandomdist=[(f"{testRandomdist[1][i].item()}-{testRandomdist[1][i+1].item()}",testRandomdist[0][i].item()) for i in range(len(testRandomdist[0]))]
+            vis_data_saver.collect_in_run(testRandomdist,"testRandomdist",re=re)
             
         #if early_stopping.early_stop:
             #print('Early stopping!')  if args.verbose=="True" else None
@@ -389,6 +408,21 @@ def run_model_DBLP(args):
     #toCsvAveraged["5_expInfo"]=exp_info
 
     writeIntoCsvLogger(toCsvAveraged,f"./log/{args.study_name}.csv")
+
+
+
+    #########################################
+    #####        data preprocess
+    #########################################
+
+
+    if not os.path.exists(f"./analysis"):
+        os.mkdir("./analysis")
+    if not os.path.exists(f"./analysis/{args.study_name}"):
+        os.mkdir(f"./analysis/{args.study_name}")
+    vis_data_saver.save(os.path.join(f"./analysis/{args.study_name}",args.study_name+".visdata"))
+
+    
 
 
 if __name__ == '__main__':
@@ -423,6 +457,7 @@ if __name__ == '__main__':
     ap.add_argument('--prod_aggr', type=str, default='None')
     ap.add_argument('--sigmoid', type=str, default='after')
     ap.add_argument('--logitsRescale', type=str, default='None')
+    ap.add_argument('--getLogitsDistBeforeSigmoid', type=str, default='False')
     #ap.add_argument('--macroAggr', type=str, default='None')
 
     

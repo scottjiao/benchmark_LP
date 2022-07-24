@@ -8,6 +8,129 @@ from sklearn.svm import LinearSVC
 import os
 
 
+import json
+
+
+
+class vis_data_collector():
+    #all data must be simple python objects like int or 'str'
+    def __init__(self):
+        self.data_dict={}
+        self.tensor_dict={}
+        #formatting:
+        #
+        # {"meta":{****parameters and study name},"re-1":{"epoch-0":{"loss":0.1,"w1":1},"epoch-1":{"loss":0.2,"w1":2},...}}
+
+    def save_meta(self,meta_data,meta_name):
+        self.data_dict["meta"]={meta_name:meta_data}
+        self.data_dict["meta"]["tensor_names"]=[]
+        
+
+    def collect_in_training(self,data,name,re,epoch,r=4):
+        if f"re-{re}" not in self.data_dict.keys():
+            self.data_dict[f"re-{re}" ]={}
+        if f"epoch-{epoch}" not in self.data_dict[f"re-{re}" ].keys():
+            self.data_dict[f"re-{re}" ][f"epoch-{epoch}"]={}
+        if type(data)==float:
+            data=round(data,r)
+        self.data_dict[f"re-{re}" ][f"epoch-{epoch}"][name]=data
+
+    def collect_in_run(self,data,name,re,r=4):
+        if f"re-{re}" not in self.data_dict.keys():
+            self.data_dict[f"re-{re}" ]={}
+        if type(data)==float:
+            data=round(data,r)
+        self.data_dict[f"re-{re}" ][name]=data
+
+    def collect_whole_process(self,data,name):
+        self.data_dict[name]=data
+    def collect_whole_process_tensor(self,data,name):
+        self.tensor_dict[name]=data
+        self.data_dict["meta"]["tensor_names"].append(name)
+
+
+    def save(self,fn):
+        
+        f = open(fn+".json", 'w')
+        json.dump(self.data_dict, f, indent=4)
+        f.close()
+
+        for k,v in self.tensor_dict.items():
+
+            torch.save(v,fn+"_"+k+".pt")
+    
+    def load(self,fn):
+        f = open(fn, 'r')
+        self.data_dict= json.load(f)
+        f.close()
+        for name in self.data_dict["meta"]["tensor_names"]:
+            self.tensor_dict[name]=torch.load(name+".pt")
+
+
+
+    def trans_to_numpy(self,name,epoch_range=None):
+        data=[]
+        re=0
+        while f"re-{re}" in self.data_dict.keys():
+            data.append([])
+            for i in range(epoch_range):
+                data[re].append(self.data_dict[f"re-{re}"][f"epoch-{i}"][name])
+            re+=1
+        data=np.array(data)
+        return np.mean(data,axis=0),np.std(data,axis=0)
+
+    def visualize_tsne(self,dn,node_idx_by_ntype):
+        from matplotlib.pyplot import figure
+
+        figure(figsize=(16, 9), dpi=80)
+        ncs=["r","b","y","g","chocolate","deeppink"]
+        print(dn)
+        layers=[]
+        heads=[]
+        ets=[]
+        for k,v in self.data_dict.items():
+            if "attention_hist_layer" in k:
+                temp=k.split("_")
+                if int(temp[3]) not in layers:
+                    layers.append(int(temp[3]))
+                if temp[4]=="head":
+                    if int(temp[5]) not in heads:
+                        heads.append(int(temp[5]))
+                if temp[4]=="et":
+                    if int(temp[5]) not in ets:
+                        ets.append(int(temp[5]))
+        layers,heads,ets=sorted(layers),sorted(heads),sorted(ets)
+        #print(layers,heads,ets)
+        #heads plot
+        for layer in layers:
+            fig,ax=plt.subplots(2,int((len(node_idx_by_ntype)+1)/2))
+            fig.set_size_inches(16,9)
+            fig.set_dpi(100)
+            nts=list(range(len(node_idx_by_ntype)))
+            for nt in nts:
+                subax=ax[int((nt)/(len(nts)/2))][int((nt)%(len(nts)/2))]
+                subax.cla()
+                datas=np.array(self.data_dict[f"tsne_emb_layer_{layer}_slot_{nt}"]).T
+                print(datas.shape)
+                for nt_j in nts:
+                    x=datas[0][ node_idx_by_ntype[nt_j]]
+                    y=datas[1][ node_idx_by_ntype[nt_j]]
+                    subax.scatter(x=x,y=y,c=ncs[nt_j],s=0.1,label=f"type {nt_j} with center ({np.mean(x):.2f},{np.mean(y):.2f}) and radius {(np.std(x)+np.std(y))/2:.2f}")
+                subax.set_xlim(-100,100)
+                subax.set_ylim(-100,100)
+                subax.set_title(f"layer_{layer}_slot_{nt}")
+                plt.title(f"layer_{layer}_slot_{nt}")
+                lgnd=subax.legend()
+                for lh in lgnd.legendHandles:
+                    lh._sizes=[10]
+            fig.suptitle(f"embedding_tsne_layer_{layer}")
+            plt.savefig(os.path.join(dn,f"slot_embeddings_layer_{layer}.png"))
+
+
+
+                
+                    
+
 def count_torch_tensor(t):
     t=t.flatten(0).cpu()
     c={}
