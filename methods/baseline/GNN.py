@@ -126,6 +126,10 @@ class myGAT(nn.Module):
         logits = logits.mean(1)
         logits = self.l2_norm(logits)
         emb.append(logits)
+        if self.inProcessEmb=="True":
+            emb.append(logits)
+        else:
+            emb=[logits]
         logits = torch.cat(emb, 1)
         left_emb = logits[left]
         right_emb = logits[right]
