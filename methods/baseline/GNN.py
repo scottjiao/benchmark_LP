@@ -251,7 +251,8 @@ class slotGAT(nn.Module):
             #if self.ae_layer=="last_hidden":
             encoded_embeddings=h
         # output projection
-        logits, _ = self.gat_layers[-1](self.g, h, e_feat,get_out=get_out, res_attn=None)   #num_nodes*num_heads*num_ntype*hidden_dim
+        logits, _ = self.gat_layers[-1](self.g, h, e_feat,get_out=get_out, res_attn=res_attn)#None)   #num_nodes*num_heads*num_ntype*hidden_dim
+        #他们最后一层用了res_attn，这是与node classification的区别之一
         #average across the ntype info
 
         
