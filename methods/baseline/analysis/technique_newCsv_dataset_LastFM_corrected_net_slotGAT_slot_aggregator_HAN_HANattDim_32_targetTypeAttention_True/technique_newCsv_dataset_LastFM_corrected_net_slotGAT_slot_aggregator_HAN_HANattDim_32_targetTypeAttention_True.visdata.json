@@ -1,0 +1,6 @@
+{
+    "meta": {
+        "exp_info": "exp setting: {'feats_type': 3, 'hidden_dim': 128, 'num_heads': 4, 'epoch': 300, 'patience': 40, 'num_layers': 3, 'lr': 0.0005, 'dropout': 0.5, 'weight_decay': 0.005, 'slope': 0.01, 'dataset': 'LastFM_corrected', 'net': 'slotGAT', 'gpu': '0', 'verbose': 'False', 'edge_feats': 32, 'batch_size': 8192, 'decoder': 'dot', 'inProcessEmb': 'True', 'l2BySlot': 'True', 'l2use': 'True', 'prod_aggr': 'None', 'sigmoid': 'after', 'logitsRescale': 'None', 'getLogitsDistBeforeSigmoid': 'False', 'targetTypeAttention': 'True', 'run': 1, 'cost': 1, 'repeat': 10, 'task_property': 'technique_newCsv', 'study_name': 'technique_newCsv_dataset_LastFM_corrected_net_slotGAT_slot_aggregator_HAN_HANattDim_32_targetTypeAttention_True', 'study_storage': 'sqlite:///db/technique_newCsv_dataset_LastFM_corrected_net_slotGAT_slot_aggregator_HAN_HANattDim_32_targetTypeAttention_True.db', 'residual': 'True', 'HANattDim': 32, 'slot_aggregator': 'HAN', 'slot_attention': 'False', 'predicted_by_slot': 'None', 'relevant_passing': 'False', 'get_test_for_online': 'False'}",
+        "tensor_names": []
+    }
+}

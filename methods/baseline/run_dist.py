@@ -156,7 +156,7 @@ def run_model_DBLP(args):
                  n_type_mappings,
                  res_n_type_mappings,
                  etype_specified_attention,
-                 eindexer,decode=args.decoder,aggregator=args.slot_aggregator,inProcessEmb=args.inProcessEmb,l2BySlot=args.l2BySlot,prod_aggr=prod_aggr,sigmoid=args.sigmoid,l2use=args.l2use,logitsRescale=args.logitsRescale,HANattDim=args.HANattDim,dataRecorder=dataRecorder)
+                 eindexer,decode=args.decoder,aggregator=args.slot_aggregator,inProcessEmb=args.inProcessEmb,l2BySlot=args.l2BySlot,prod_aggr=prod_aggr,sigmoid=args.sigmoid,l2use=args.l2use,logitsRescale=args.logitsRescale,HANattDim=args.HANattDim,dataRecorder=dataRecorder,targetTypeAttention=args.targetTypeAttention,target_edge_type=dl.links_test['meta'])
         print(net) if args.verbose=="True" else None
         
 
@@ -458,6 +458,7 @@ if __name__ == '__main__':
     ap.add_argument('--sigmoid', type=str, default='after')
     ap.add_argument('--logitsRescale', type=str, default='None')
     ap.add_argument('--getLogitsDistBeforeSigmoid', type=str, default='False')
+    ap.add_argument('--targetTypeAttention', type=str, default='False')
     #ap.add_argument('--macroAggr', type=str, default='None')
 
     
