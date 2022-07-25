@@ -161,7 +161,7 @@ class slotGAT(nn.Module):
                  eindexer,
                  ae_layer=False,aggregator="average",semantic_trans="False",semantic_trans_normalize="row",attention_average="False",attention_mse_sampling_factor=0,attention_mse_weight_factor=0,attention_1_type_bigger_constraint=0,attention_0_type_bigger_constraint=0,predicted_by_slot="None",
                  addLogitsEpsilon=0,addLogitsTrain="None",get_out=[""],slot_attention="False",relevant_passing="False",
-                 decode='distmult',inProcessEmb="True",l2BySlot="False",prod_aggr=None,sigmoid="after",l2use="True",logitsRescale="None",HANattDim=128,dataRecorder=None):
+                 decode='distmult',inProcessEmb="True",l2BySlot="False",prod_aggr=None,sigmoid="after",l2use="True",logitsRescale="None",HANattDim=128,dataRecorder=None,targetTypeAttention="False",target_edge_type=None):
         super(slotGAT, self).__init__()
         self.g = g
         self.num_layers = num_layers
@@ -192,6 +192,8 @@ class slotGAT(nn.Module):
         self.logitsRescale=logitsRescale
         self.HANattDim=HANattDim
         self.dataRecorder=dataRecorder
+        self.targetTypeAttention=targetTypeAttention
+        self.target_edge_type=target_edge_type
         #self.ae_drop=nn.Dropout(feat_drop)
         #if ae_layer=="last_hidden":
             #self.lc_ae=nn.ModuleList([nn.Linear(num_hidden * heads[-2],num_hidden, bias=True),nn.Linear(num_hidden,num_ntype, bias=True)])
@@ -220,6 +222,13 @@ class slotGAT(nn.Module):
                 last_dim=num_hidden
             self.macroLinear=nn.Linear(last_dim, self.HANattDim, bias=True);nn.init.xavier_normal_(self.macroLinear.weight, gain=1.414)
             self.macroSemanticVec=nn.Parameter(torch.FloatTensor(self.HANattDim,1));nn.init.normal_(self.macroSemanticVec,std=1)
+        
+        if self.targetTypeAttention=="True":
+            assert self.aggregator=="HAN"
+            tnt0,tnt1=self.target_edge_type[0]
+            self.targetTypeFilter=torch.zeros(num_ntype)
+            self.targetTypeFilter[tnt0]=1;self.targetTypeFilter[tnt1]=1  #(1,1,0) or others like this
+
         self.by_slot=[f"by_slot_{nt}" for nt in range(g.num_ntypes)]
         assert aggregator in (["onedimconv","average","last_fc","slot_majority_voting","max","None","HAN"]+self.by_slot)
         if self.aggregator=="onedimconv":
@@ -232,6 +241,7 @@ class slotGAT(nn.Module):
             self.decoder = DistMult(num_etypes, num_classes*(num_layers+2))
         elif decode == 'dot':
             self.decoder = Dot()
+
 
     def forward(self, features_list,e_feat, left, right, mid, get_out="False"): 
         encoded_embeddings=None
@@ -340,11 +350,17 @@ class slotGAT(nn.Module):
             o = torch.cat(emb, 2).flatten(1)
         else:
             o = torch.cat(emb, 1)
-
         if self.aggregator=="HAN" :
             o=o.view(-1, self.num_ntype,int(o.shape[1]/self.num_ntype))
-            slot_scores=(F.tanh( self.macroLinear(o))  @  self.macroSemanticVec).mean(0,keepdim=True)  #num_slots
-            self.slot_scores=F.softmax(slot_scores,dim=1)
+            if self.targetTypeAttention=="True":
+                slot_scores=(F.tanh( self.macroLinear(o))  @  self.macroSemanticVec).mean(0,keepdim=True) 
+                toSoftmax=slot_scores[:,[self.target_edge_type[0][0],self.target_edge_type[0][1]],:]
+                toSoftmax=F.softmax(toSoftmax,dim=1)
+                self.slot_scores=torch.zeros_like(slot_scores)
+                self.slot_scores[:,[self.target_edge_type[0][0],self.target_edge_type[0][1]],:]=toSoftmax
+            else:
+                slot_scores=(F.tanh( self.macroLinear(o))  @  self.macroSemanticVec).mean(0,keepdim=True)  #num_slots
+                self.slot_scores=F.softmax(slot_scores,dim=1)
             o=(o*self.slot_scores).sum(1)
 
         left_emb = o[left]
